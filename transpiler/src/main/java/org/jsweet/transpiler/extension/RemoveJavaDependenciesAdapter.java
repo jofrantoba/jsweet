@@ -145,12 +145,32 @@ public class RemoveJavaDependenciesAdapter extends Java2TypeScriptAdapter {
 
         extTypesMapping.put(Method.class.getName(), "{ owner: any, name: string, fn : Function }");
 
-        addTypeMapping(
-                (typeTree,
-                        name) -> name.startsWith("java.") && typeTree.getType() != null
-                                && types().isSubtype(typeTree.getType(), util().getType(Throwable.class)) ? "Error"
-                                        : null);
+        // replace java.*
+        addTypeMapping((ExtendedElement typeElement, String qualifiedName) -> {
+            TypeMirror type = typeElement.getType();
+            if (!qualifiedName.startsWith("java.") || type == null) {
+                return null;
+            }
+
+            // Throwable
+            if (types().isSubtype(type, util().getType(Throwable.class))) {
+                return "Error";
+            }
+
+            // Optional
+            if (types().isSubtype(types().erasure(type), types().erasure(util().getType(Optional.class)))
+                    && type instanceof DeclaredType) {
+                List<? extends TypeMirror> typeArgs = ((DeclaredType) type).getTypeArguments();
+                if (typeArgs.size() > 0) {
+                    return getMappedType(typeArgs.get(0));
+                }
+            }
+
+            return null;
+        });
+
         addTypeMapping((ExtendedElement typeTree, String name) -> mapWeakReferenceType(typeTree, name));
+
         excludedJavaSuperTypes.add(EventObject.class.getName());
     }
 
